@@ -27,6 +27,15 @@ class HP3458A(serial.Serial):
 
         return dat_str[0:17]        # strip trailing '/n'
 
+    def getTemp(self):
+        self.write('++auto 1\r\n')  # Set instrument to TALK
+        self.write('TEMP?\r\n')     # send READ command
+
+        dat_str = self.readline()   # read upto first '/r/n'
+
+        self.write('++auto 0\r\n')  # Set instrument to LISTEN
+
+        return dat_str[0:16]        # strip trailing '/n'
 
     def setup_connection(self, GPIB):
         # set GPIB address HP3458A (default 22)
