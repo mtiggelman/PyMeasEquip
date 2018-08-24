@@ -1,2 +1,2 @@
 # PyMeasEquip
-Python measurement equipment interfaces
+Python measurement equipment interfaces. Requires PySerial.

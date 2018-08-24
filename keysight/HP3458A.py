@@ -4,53 +4,76 @@ import serial
 class HP3458A(serial.Serial):
     def __init__(self, port, baud, timeout, GPIB=22):
         super(HP3458A, self).__init__(port, baud, timeout = timeout)
+
+        self.vrange = None
+        self.nplc = None
+        self.ndig = None
+        self.address = None
+
         # Set GPIB connection
         self.setup_connection(GPIB)
-        # Set default 10 PLC and 9 digits
-        self.setup_measurement(10, 9)
+        # Setup basic configuration
+        self.basic_configuration()
+        print(self.get_ID())
 
-    # read voltage from HP3458A
-    def getVoltage (self):
-        self.write('++auto 1\r\n')  # Set instrument to TALK
-        self.write('READ?\r\n')     # send READ command
+    def get_ID(self):
+        self.write(b'ID?\r\n')
+        return self.readline()
 
-        dat_str = self.readline()   # read upto first '/r/n'
+    def start_meas(self):
+        self.write(b'TARM SGL,1\r\n')
 
-        self.write('++auto 0\r\n')  # Set instrument to LISTEN
-
-        return dat_str[0:16]        # strip trailing '/n'
-
-    def getName(self):
-        self.write('++auto 1\r\n')  # Set instrument to TALK
-        self.write('ID?\r\n')
-        dat_str = self.readline()
-
-        return dat_str[0:17]        # strip trailing '/n'
-
-    def getTemp(self):
-        self.write('++auto 1\r\n')  # Set instrument to TALK
-        self.write('TEMP?\r\n')     # send READ command
-
-        dat_str = self.readline()   # read upto first '/r/n'
-
-        self.write('++auto 0\r\n')  # Set instrument to LISTEN
-
-        return dat_str[0:16]        # strip trailing '/n'
+    def get_result(self):
+        return self.readline()
 
     def setup_connection(self, GPIB):
-        # set GPIB address HP3458A (default 22)
-        self.write('++addr ' + str(GPIB) + '\r\n')
+        if not isinstance(GPIB, int):
+            raise ValueError('GPIB must be an integer')
+        if GPIB < 0 or GPIB > 30:
+            raise ValueError('Value {} not allowed: 0 <= nplc <= 30')
 
-    # Set measurement settings
-    def setup_measurement(self, NPLC, NDIG):
-        # Set to DC voltage measurement
-        self.write('DCV\r\n')
+        # Set Prologix to Controller and write/listen mode
+        self.write(b'++mode 1\r\n')
+        self.write(b'++auto 1\r\n')
+        # Set the adress of the device to talk to
+        self.write(b'++addr ' + str(GPIB).encode() + b'\r\n')
 
-        # Set power line cycle integration
-        self.write('NPLC ' + str(NPLC) + '\r\n')
+        self.address = GPIB
 
-        # Set number of digits
-        self.write('NDIG ' + str(NDIG) + '\r\n')
+    def set_nplc(self, nplc):
+        if not isinstance(nplc, int):
+            raise ValueError('nplc must be an integer')
+        if nplc < 0:
+            raise ValueError('Value {} not allowed: nplc > 0'.format(nplc))
 
-        # 1 reading
-        self.write('NRDGS 1\r\n')
+        self.write(b'NPLC ' + str(nplc).encode() + b'\r\n')
+        self.nplc = nplc
+
+    def set_ndig(self, ndig):
+        if not isinstance(ndig, int):
+            raise ValueError('ndig must be an integer')
+        if ndig < 3 or ndig > 8:
+            raise ValueError('Value {} not allowed: 3 <= nplc <= 8'.format(ndig))
+
+        self.write(b'NDIG ' + str(ndig).encode() + b'\r\n')
+        self.ndig = ndig
+
+    def set_range(self, vrange):
+        self.write(b'RANGE ' + str(vrange).encode() + b'\r\n')
+        self.vrange = vrange
+
+    def basic_configuration(self, vrange = 10, nplc = 10, ndig = 8):
+        self.write(b'PRESET NORM\r\n') # Load normal preset
+        self.write(b'OFORMAT ASCII\r\n') # Output ascii string
+        self.write(b'DCV ' + str(vrange).encode() + b'\r\n') # Set DC + vrange
+        self.write(b'TARM HOLD\r\n') # Trigger arm hold
+        self.write(b'TRIG AUTO\r\n') # Trigger auto
+        self.write(b'NPLC ' + str(nplc).encode() + b'\r\n') # Set nplc
+        self.write(b'NRDGS 1,AUTO\r\n') # No. of readings to 1
+        self.write(b'MEM OFF\r\n') # Turn memory off
+        self.write(b'END ALWAYS\r\n')
+        self.write(b'NDIG ' + str(ndig).encode() + b'\r\n') # No. of digits
+
+        self.vrange = vrange
+        self.nplc = nplc
+        self.ndig = ndig
